@@ -26,6 +26,6 @@
         android:strokeColor="#000000"
         android:strokeWidth="4"
         android:strokeLineCap="round"
-        android:fillColor="@android:color/transparent" />
+        android:fillColor="#00000000" />
 
 </vector>

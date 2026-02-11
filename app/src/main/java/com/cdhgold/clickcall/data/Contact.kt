@@ -6,5 +6,6 @@ data class Contact(
     val nickname: String,
     val phoneNumber: String,
     val imageUri: String? = null,
+    val isPriority: Boolean = false,
     val createdAt: Long = System.currentTimeMillis()
 )

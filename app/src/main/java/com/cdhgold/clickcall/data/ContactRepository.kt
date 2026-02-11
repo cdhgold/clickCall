@@ -13,7 +13,8 @@ import java.lang.reflect.Type
 class ContactRepository(private val context: Context) {
 
     companion object {
-        private const val MAX_CONTACTS = 10
+        private const val MAX_CONTACTS = 30
+        private const val MAX_PRIORITY = 3
         private const val CONTACTS_FILE = "contacts.json"
     }
 
@@ -91,6 +92,20 @@ class ContactRepository(private val context: Context) {
     suspend fun getContactCount(): Int {
         return withContext(Dispatchers.IO) {
             _contactsFlow.value.size
+        }
+    }
+
+    suspend fun isNicknameDuplicate(nickname: String, excludeId: Int = -1): Boolean {
+        return withContext(Dispatchers.IO) {
+            _contactsFlow.value.any {
+                it.nickname.equals(nickname.trim(), ignoreCase = true) && it.id != excludeId
+            }
+        }
+    }
+
+    suspend fun isPriorityFull(excludeId: Int = -1): Boolean {
+        return withContext(Dispatchers.IO) {
+            _contactsFlow.value.count { it.isPriority && it.id != excludeId } >= MAX_PRIORITY
         }
     }
 }

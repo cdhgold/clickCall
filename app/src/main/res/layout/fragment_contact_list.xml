@@ -19,7 +19,7 @@
 
     </com.google.android.material.appbar.AppBarLayout>
 
-    <!-- RecyclerView -->
+    <!-- RecyclerView + FAB overlay -->
     <FrameLayout
         android:layout_width="match_parent"
         android:layout_height="0dp"
@@ -38,37 +38,35 @@
             android:id="@+id/empty_state_container"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:orientation="vertical"
             android:gravity="center"
-            android:visibility="gone"
-            android:padding="32dp">
+            android:orientation="vertical"
+            android:padding="32dp"
+            android:visibility="gone">
 
             <ImageView
                 android:layout_width="120dp"
                 android:layout_height="120dp"
                 android:layout_marginBottom="24dp"
                 android:contentDescription="@string/empty_list_title"
-                android:src="@drawable/ic_default_smiley"
-                android:alpha="0.5"
-                app:tint="@color/purple_500" />
+                android:src="@drawable/ic_default_smiley" />
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:layout_marginBottom="8dp"
                 android:text="@string/empty_list_title"
-                android:textSize="20sp"
-                android:textStyle="bold"
                 android:textColor="@color/black"
-                android:layout_marginBottom="8dp" />
+                android:textSize="20sp"
+                android:textStyle="bold" />
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:layout_marginBottom="32dp"
                 android:text="@string/empty_list_description"
-                android:textSize="16sp"
-                android:textColor="@color/gray_medium"
                 android:textAlignment="center"
-                android:layout_marginBottom="32dp" />
+                android:textColor="@color/gray_medium"
+                android:textSize="16sp" />
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btn_add_contact_empty"
@@ -79,27 +77,12 @@
 
         </LinearLayout>
 
-    </FrameLayout>
-
-    <!-- AdMob Banner -->
-<!--    <com.google.android.gms.ads.AdView
-        android:id="@+id/adView"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_gravity="center_horizontal"
-        app:adSize="BANNER"
-        app:adUnitId="ca-app-pub-3940256099942544/6300978111" /> -->
-
-    <!-- Floating Action Button for Adding Contact -->
-    <FrameLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content">
-
+        <!-- Floating Action Button -->
         <com.google.android.material.floatingactionbutton.FloatingActionButton
             android:id="@+id/fab_add"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_gravity="end"
+            android:layout_gravity="bottom|end"
             android:layout_margin="16dp"
             android:contentDescription="@string/add_contact_button"
             app:srcCompat="@android:drawable/ic_input_add" />

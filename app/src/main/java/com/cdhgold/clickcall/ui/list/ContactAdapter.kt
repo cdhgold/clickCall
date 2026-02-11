@@ -1,6 +1,7 @@
 package com.cdhgold.clickcall.ui.list
 
 import android.view.LayoutInflater
+import android.view.View
 import android.view.ViewGroup
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
@@ -10,7 +11,8 @@ import com.cdhgold.clickcall.databinding.ItemContactBinding
 import com.cdhgold.clickcall.util.loadContactImage
 
 class ContactAdapter(
-    private val onItemClick: (Contact) -> Unit,
+    private val onCallClick: (Contact) -> Unit,
+    private val onEditClick: (Contact) -> Unit,
     private val onDeleteClick: (Contact) -> Unit
 ) : ListAdapter<Contact, ContactAdapter.ContactViewHolder>(ContactDiffCallback()) {
 
@@ -20,7 +22,7 @@ class ContactAdapter(
             parent,
             false
         )
-        return ContactViewHolder(binding, onItemClick, onDeleteClick)
+        return ContactViewHolder(binding, onCallClick, onEditClick, onDeleteClick)
     }
 
     override fun onBindViewHolder(holder: ContactViewHolder, position: Int) {
@@ -29,7 +31,8 @@ class ContactAdapter(
 
     class ContactViewHolder(
         private val binding: ItemContactBinding,
-        private val onItemClick: (Contact) -> Unit,
+        private val onCallClick: (Contact) -> Unit,
+        private val onEditClick: (Contact) -> Unit,
         private val onDeleteClick: (Contact) -> Unit
     ) : RecyclerView.ViewHolder(binding.root) {
 
@@ -38,9 +41,19 @@ class ContactAdapter(
                 tvNickname.text = contact.nickname
                 tvPhoneNumber.text = contact.phoneNumber
                 ivContact.loadContactImage(contact.imageUri)
+                ivPriority.visibility = if (contact.isPriority) View.VISIBLE else View.GONE
 
-                root.setOnClickListener {
-                    onItemClick(contact)
+                // Image click -> make call
+                ivContact.setOnClickListener {
+                    onCallClick(contact)
+                }
+
+                // Text area click -> edit contact
+                tvNickname.setOnClickListener {
+                    onEditClick(contact)
+                }
+                tvPhoneNumber.setOnClickListener {
+                    onEditClick(contact)
                 }
 
                 btnDelete.setOnClickListener {
@@ -60,4 +73,3 @@ class ContactAdapter(
         }
     }
 }
-
