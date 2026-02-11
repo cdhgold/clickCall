@@ -1,6 +1,10 @@
 package com.cdhgold.clickcall.data
 
+import android.content.ContentValues
 import android.content.Context
+import android.os.Build
+import android.os.Environment
+import android.provider.MediaStore
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import kotlinx.coroutines.Dispatchers
@@ -16,14 +20,31 @@ class ContactRepository(private val context: Context) {
         private const val MAX_CONTACTS = 30
         private const val MAX_PRIORITY = 3
         private const val CONTACTS_FILE = "contacts.json"
+        private const val BACKUP_FOLDER = "ClickCall"
+        private const val BACKUP_FILE = "contacts_backup.json"
     }
 
     private val gson = Gson()
     private val contactsFile: File = File(context.filesDir, CONTACTS_FILE)
     private val listType: Type = object : TypeToken<List<Contact>>() {}.type
 
-    private val _contactsFlow = MutableStateFlow<List<Contact>>(loadFromFile())
+    private val _contactsFlow = MutableStateFlow<List<Contact>>(loadWithRestore())
     val allContacts: Flow<List<Contact>> = _contactsFlow
+
+    /**
+     * Load from internal file. If empty, try restoring from Downloads backup.
+     */
+    private fun loadWithRestore(): List<Contact> {
+        val internal = loadFromFile()
+        if (internal.isNotEmpty()) return internal
+
+        // Try restore from backup
+        val restored = restoreFromBackup()
+        if (restored.isNotEmpty()) {
+            saveToFile(restored)
+        }
+        return restored
+    }
 
     private fun loadFromFile(): List<Contact> {
         return try {
@@ -41,8 +62,98 @@ class ContactRepository(private val context: Context) {
         try {
             val json = gson.toJson(list)
             contactsFile.writeText(json)
+            backupToDownloads(json)
         } catch (e: Exception) {
             e.printStackTrace()
+        }
+    }
+
+    /**
+     * Backup contacts JSON to Downloads/ClickCall/contacts_backup.json
+     */
+    private fun backupToDownloads(json: String) {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                // Android 10+: MediaStore API
+                val resolver = context.contentResolver
+
+                // Delete existing backup first
+                val selection = "${MediaStore.MediaColumns.RELATIVE_PATH}=? AND ${MediaStore.MediaColumns.DISPLAY_NAME}=?"
+                val selectionArgs = arrayOf("${Environment.DIRECTORY_DOWNLOADS}/$BACKUP_FOLDER/", BACKUP_FILE)
+                resolver.delete(MediaStore.Downloads.EXTERNAL_CONTENT_URI, selection, selectionArgs)
+
+                // Write new backup
+                val values = ContentValues().apply {
+                    put(MediaStore.MediaColumns.DISPLAY_NAME, BACKUP_FILE)
+                    put(MediaStore.MediaColumns.MIME_TYPE, "application/json")
+                    put(MediaStore.MediaColumns.RELATIVE_PATH, "${Environment.DIRECTORY_DOWNLOADS}/$BACKUP_FOLDER")
+                }
+                val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+                uri?.let {
+                    resolver.openOutputStream(it)?.use { stream ->
+                        stream.write(json.toByteArray())
+                    }
+                }
+            } else {
+                // Android 9 and below: direct file access
+                val backupDir = File(
+                    Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
+                    BACKUP_FOLDER
+                )
+                if (!backupDir.exists()) backupDir.mkdirs()
+                File(backupDir, BACKUP_FILE).writeText(json)
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    /**
+     * Restore contacts from Downloads/ClickCall/contacts_backup.json
+     */
+    private fun restoreFromBackup(): List<Contact> {
+        return try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                val resolver = context.contentResolver
+                val selection = "${MediaStore.MediaColumns.RELATIVE_PATH}=? AND ${MediaStore.MediaColumns.DISPLAY_NAME}=?"
+                val selectionArgs = arrayOf("${Environment.DIRECTORY_DOWNLOADS}/$BACKUP_FOLDER/", BACKUP_FILE)
+
+                val cursor = resolver.query(
+                    MediaStore.Downloads.EXTERNAL_CONTENT_URI,
+                    arrayOf(MediaStore.MediaColumns._ID),
+                    selection,
+                    selectionArgs,
+                    null
+                )
+
+                cursor?.use {
+                    if (it.moveToFirst()) {
+                        val id = it.getLong(it.getColumnIndexOrThrow(MediaStore.MediaColumns._ID))
+                        val uri = android.content.ContentUris.withAppendedId(
+                            MediaStore.Downloads.EXTERNAL_CONTENT_URI, id
+                        )
+                        resolver.openInputStream(uri)?.use { stream ->
+                            val json = stream.bufferedReader().readText()
+                            if (json.isNotBlank()) {
+                                return gson.fromJson(json, listType) ?: emptyList()
+                            }
+                        }
+                    }
+                }
+                emptyList()
+            } else {
+                val backupFile = File(
+                    Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
+                    "$BACKUP_FOLDER/$BACKUP_FILE"
+                )
+                if (!backupFile.exists()) return emptyList()
+                val json = backupFile.readText()
+                if (json.isBlank()) return emptyList()
+                gson.fromJson(json, listType) ?: emptyList()
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            emptyList()
         }
     }
 
@@ -53,7 +164,7 @@ class ContactRepository(private val context: Context) {
 
             val newId = (current.maxOfOrNull { it.id } ?: 0) + 1
             val toInsert = contact.copy(id = newId)
-            current.add(0, toInsert) // newest first
+            current.add(0, toInsert)
             saveToFile(current)
             _contactsFlow.value = current
             true
