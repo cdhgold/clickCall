@@ -2,6 +2,7 @@
     <string name="app_name">ClickCall</string>
 
     <!-- List Screen -->
+    <string name="title_contact_list">바로걸기</string>
     <string name="empty_list_title">연락처 없음</string>
     <string name="empty_list_description">등록된 연락처가 없습니다.\n첫 번째 연락처를 추가해주세요.</string>
     <string name="add_contact_button">연락처 추가</string>

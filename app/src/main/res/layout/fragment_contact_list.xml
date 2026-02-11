@@ -14,8 +14,8 @@
             android:layout_width="match_parent"
             android:layout_height="?attr/actionBarSize"
             android:background="?attr/colorPrimary"
-            app:title="@string/app_name"
-            app:titleTextColor="@color/white" />
+            app:title="@string/title_contact_list"
+            app:titleTextColor="@color/yellow_on_primary" />
 
     </com.google.android.material.appbar.AppBarLayout>
 

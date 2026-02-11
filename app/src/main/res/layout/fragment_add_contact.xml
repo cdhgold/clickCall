@@ -18,7 +18,7 @@
             android:layout_height="?attr/actionBarSize"
             android:background="?attr/colorPrimary"
             app:title="@string/title_add_contact"
-            app:titleTextColor="@color/white"
+            app:titleTextColor="@color/yellow_on_primary"
             app:navigationIcon="@android:drawable/ic_menu_close_clear_cancel" />
 
     </com.google.android.material.appbar.AppBarLayout>

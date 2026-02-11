@@ -2,6 +2,7 @@
     <string name="app_name">ClickCall</string>
 
     <!-- List Screen -->
+    <string name="title_contact_list">ClickCall</string>
     <string name="empty_list_title">No Contacts</string>
     <string name="empty_list_description">No contacts registered.\nPlease add your first contact.</string>
     <string name="add_contact_button">Add Contact</string>
