@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">ClickCall</string>
+    <string name="app_name">바로걸기</string>
 
     <!-- List Screen -->
     <string name="title_contact_list">바로걸기</string>
