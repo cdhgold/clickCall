@@ -37,14 +37,18 @@
             <!-- Contact Image -->
             <FrameLayout
                 android:layout_width="match_parent"
-                android:layout_height="200dp"
+                android:layout_height="wrap_content"
+                android:minHeight="200dp"
                 android:layout_marginBottom="16dp">
 
                 <ImageView
                     android:id="@+id/iv_contact_image"
                     android:layout_width="match_parent"
-                    android:layout_height="match_parent"
-                    android:scaleType="centerCrop"
+                    android:layout_height="wrap_content"
+                    android:minHeight="200dp"
+                    android:maxHeight="500dp"
+                    android:adjustViewBounds="true"
+                    android:scaleType="fitCenter"
                     android:contentDescription="@string/app_name"
                     android:background="@color/gray_light" />
 

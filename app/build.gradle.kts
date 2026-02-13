@@ -57,7 +57,7 @@ dependencies {
     implementation(libs.coil)
 
     // Google Mobile Ads
-    // implementation(libs.google.mobile.ads) // 광고 관련 의존성은 주석 처리되었습니다.
+    implementation(libs.google.mobile.ads)
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

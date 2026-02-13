@@ -38,4 +38,15 @@
     <string name="confirm_delete_title">Delete Contact</string>
     <string name="confirm_delete_message">Are you sure you want to delete this contact?</string>
     <string name="button_delete">Delete</string>
+
+    <!-- Export / Import -->
+    <string name="menu_export">Export Contacts</string>
+    <string name="menu_import">Import Contacts</string>
+    <string name="export_success">Contacts exported successfully</string>
+    <string name="export_failed">Export failed</string>
+    <string name="import_success">Contacts imported successfully</string>
+    <string name="import_failed">Import failed. Please check the file format.</string>
+    <string name="import_confirm_title">Import Contacts</string>
+    <string name="import_confirm_message">Current contacts will be replaced with the imported data. Continue?</string>
+    <string name="button_confirm">Confirm</string>
 </resources>

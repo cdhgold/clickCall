@@ -43,6 +43,37 @@ class ContactListFragment : Fragment() {
             pendingPhoneNumber = null
         }
 
+    private val exportLauncher =
+        registerForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+            uri ?: return@registerForActivityResult
+            viewModel.exportContacts(uri) { success ->
+                val msgRes = if (success) R.string.export_success else R.string.export_failed
+                Toast.makeText(requireContext(), msgRes, Toast.LENGTH_SHORT).show()
+            }
+        }
+
+    private var pendingImportUri: android.net.Uri? = null
+
+    private val importLauncher =
+        registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+            uri ?: return@registerForActivityResult
+            pendingImportUri = uri
+            MaterialAlertDialogBuilder(requireContext())
+                .setTitle(R.string.import_confirm_title)
+                .setMessage(R.string.import_confirm_message)
+                .setNegativeButton(R.string.button_cancel, null)
+                .setPositiveButton(R.string.button_confirm) { _, _ ->
+                    pendingImportUri?.let { importUri ->
+                        viewModel.importContacts(importUri) { success ->
+                            val msgRes = if (success) R.string.import_success else R.string.import_failed
+                            Toast.makeText(requireContext(), msgRes, Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                    pendingImportUri = null
+                }
+                .show()
+        }
+
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?,
@@ -59,9 +90,27 @@ class ContactListFragment : Fragment() {
         viewModel = ContactListViewModel(repository)
         callManager = CallManager(requireContext())
 
+        setupToolbarMenu()
         setupRecyclerView()
         setupObservers()
         setupListeners()
+    }
+
+    private fun setupToolbarMenu() {
+        binding.toolbar.inflateMenu(R.menu.menu_contact_list)
+        binding.toolbar.setOnMenuItemClickListener { menuItem ->
+            when (menuItem.itemId) {
+                R.id.action_export -> {
+                    exportLauncher.launch("clickcall_contacts.json")
+                    true
+                }
+                R.id.action_import -> {
+                    importLauncher.launch(arrayOf("application/json", "application/octet-stream"))
+                    true
+                }
+                else -> false
+            }
+        }
     }
 
     private fun setupRecyclerView() {

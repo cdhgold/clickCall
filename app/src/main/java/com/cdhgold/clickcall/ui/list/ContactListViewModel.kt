@@ -1,5 +1,6 @@
 package com.cdhgold.clickcall.ui.list
 
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.cdhgold.clickcall.data.Contact
@@ -21,6 +22,20 @@ class ContactListViewModel(private val repository: ContactRepository) : ViewMode
     fun deleteContact(contact: Contact) {
         viewModelScope.launch {
             repository.deleteContact(contact)
+        }
+    }
+
+    fun exportContacts(uri: Uri, onResult: (Boolean) -> Unit) {
+        viewModelScope.launch {
+            val success = repository.exportToUri(uri)
+            onResult(success)
+        }
+    }
+
+    fun importContacts(uri: Uri, onResult: (Boolean) -> Unit) {
+        viewModelScope.launch {
+            val success = repository.importFromUri(uri)
+            onResult(success)
         }
     }
 }
