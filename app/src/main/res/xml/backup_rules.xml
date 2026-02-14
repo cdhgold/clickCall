@@ -7,5 +7,6 @@
 -->
 <full-backup-content>
     <include domain="file" path="contacts.json"/>
+    <include domain="file" path="contact_images/"/>
     <include domain="sharedpref" path="contact_backup.xml"/>
 </full-backup-content>

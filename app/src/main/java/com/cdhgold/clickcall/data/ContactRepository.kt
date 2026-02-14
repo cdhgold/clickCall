@@ -1,8 +1,11 @@
 package com.cdhgold.clickcall.data
 
+import android.content.ContentValues
 import android.content.Context
 import android.net.Uri
+import android.os.Build
 import android.os.Environment
+import android.provider.MediaStore
 import android.util.Log
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
@@ -23,7 +26,7 @@ class ContactRepository(private val context: Context) {
         private const val CONTACTS_FILE = "contacts.json"
         private const val BACKUP_FOLDER = "ClickCall"
         private const val BACKUP_FILE = "contacts_backup.json"
-        private const val IMAGES_FOLDER = "images"
+        private const val IMAGES_FOLDER = "contact_images"
         private const val PREFS_NAME = "contact_backup"
         private const val PREFS_KEY = "contacts_json"
     }
@@ -36,9 +39,8 @@ class ContactRepository(private val context: Context) {
     private val _contactsFlow = MutableStateFlow<List<Contact>>(loadWithRestore())
     val allContacts: Flow<List<Contact>> = _contactsFlow
 
-    /**
-     * Load from internal file. If empty, try restoring from Downloads backup.
-     */
+    // ── Load & Restore ──────────────────────────────────────────
+
     private fun loadWithRestore(): List<Contact> {
         val internal = loadFromFile()
         if (internal.isNotEmpty()) {
@@ -46,7 +48,7 @@ class ContactRepository(private val context: Context) {
             return internal
         }
 
-        // Try SharedPreferences backup first
+        // Try SharedPreferences backup (survives reinstall via Auto Backup)
         Log.d(TAG, "Internal storage empty, trying SharedPreferences...")
         val prefsRestored = restoreFromPrefs()
         if (prefsRestored.isNotEmpty()) {
@@ -55,14 +57,14 @@ class ContactRepository(private val context: Context) {
             return prefsRestored
         }
 
-        // Then try Downloads backup
-        Log.d(TAG, "SharedPreferences empty, trying Downloads backup...")
-        val restored = restoreFromBackup()
+        // Then try MediaStore Downloads backup
+        Log.d(TAG, "SharedPreferences empty, trying MediaStore backup...")
+        val restored = restoreFromMediaStore()
         if (restored.isNotEmpty()) {
-            Log.d(TAG, "Restored ${restored.size} contacts from Downloads backup")
+            Log.d(TAG, "Restored ${restored.size} contacts from MediaStore backup")
             saveToFile(restored)
         } else {
-            Log.d(TAG, "No backup found or backup is empty")
+            Log.d(TAG, "No backup found. Use menu > Import to restore manually.")
         }
         return restored
     }
@@ -79,17 +81,6 @@ class ContactRepository(private val context: Context) {
         }
     }
 
-    private fun saveToFile(list: List<Contact>) {
-        try {
-            val json = gson.toJson(list)
-            contactsFile.writeText(json)
-            prefs.edit().putString(PREFS_KEY, json).apply()
-            backupToExternalStorage(json)
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-    }
-
     private fun restoreFromPrefs(): List<Contact> {
         return try {
             val json = prefs.getString(PREFS_KEY, null)
@@ -101,28 +92,117 @@ class ContactRepository(private val context: Context) {
         }
     }
 
-    /**
-     * Get the shared backup directory: /storage/emulated/0/ClickCall/
-     */
-    private fun getBackupDir(): File {
-        val dir = File(Environment.getExternalStorageDirectory(), BACKUP_FOLDER)
-        if (!dir.exists()) dir.mkdirs()
-        return dir
+    // ── Save & Backup ───────────────────────────────────────────
+
+    private fun saveToFile(list: List<Contact>) {
+        try {
+            val json = gson.toJson(list)
+            contactsFile.writeText(json)
+            prefs.edit().putString(PREFS_KEY, json).apply()
+            backupToMediaStore(json)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 
-    private fun getBackupFile(): File = File(getBackupDir(), BACKUP_FILE)
+    // ── MediaStore Backup (Downloads/ClickCall/) ────────────────
+
+    private fun backupToMediaStore(json: String) {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                val resolver = context.contentResolver
+                // Delete existing backup first
+                val selection = "${MediaStore.MediaColumns.RELATIVE_PATH}=? AND ${MediaStore.MediaColumns.DISPLAY_NAME}=?"
+                val selectionArgs = arrayOf("${Environment.DIRECTORY_DOWNLOADS}/$BACKUP_FOLDER/", BACKUP_FILE)
+                resolver.delete(MediaStore.Downloads.EXTERNAL_CONTENT_URI, selection, selectionArgs)
+
+                // Write new backup
+                val values = ContentValues().apply {
+                    put(MediaStore.MediaColumns.DISPLAY_NAME, BACKUP_FILE)
+                    put(MediaStore.MediaColumns.MIME_TYPE, "application/json")
+                    put(MediaStore.MediaColumns.RELATIVE_PATH, "${Environment.DIRECTORY_DOWNLOADS}/$BACKUP_FOLDER")
+                }
+                val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+                uri?.let {
+                    resolver.openOutputStream(it)?.use { stream ->
+                        stream.write(json.toByteArray())
+                    }
+                    Log.d(TAG, "Backup saved via MediaStore: $it")
+                }
+            } else {
+                val backupDir = File(
+                    Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
+                    BACKUP_FOLDER
+                )
+                if (!backupDir.exists()) backupDir.mkdirs()
+                File(backupDir, BACKUP_FILE).writeText(json)
+                Log.d(TAG, "Backup saved to Downloads/$BACKUP_FOLDER/$BACKUP_FILE")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Backup to MediaStore failed", e)
+        }
+    }
+
+    private fun restoreFromMediaStore(): List<Contact> {
+        Log.d(TAG, "Attempting restore from MediaStore backup...")
+        return try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                val resolver = context.contentResolver
+                val selection = "${MediaStore.MediaColumns.RELATIVE_PATH}=? AND ${MediaStore.MediaColumns.DISPLAY_NAME}=?"
+                val selectionArgs = arrayOf("${Environment.DIRECTORY_DOWNLOADS}/$BACKUP_FOLDER/", BACKUP_FILE)
+
+                val cursor = resolver.query(
+                    MediaStore.Downloads.EXTERNAL_CONTENT_URI,
+                    arrayOf(MediaStore.MediaColumns._ID),
+                    selection,
+                    selectionArgs,
+                    null
+                )
+
+                cursor?.use {
+                    if (it.moveToFirst()) {
+                        val id = it.getLong(it.getColumnIndexOrThrow(MediaStore.MediaColumns._ID))
+                        val uri = android.content.ContentUris.withAppendedId(
+                            MediaStore.Downloads.EXTERNAL_CONTENT_URI, id
+                        )
+                        resolver.openInputStream(uri)?.use { stream ->
+                            val json = stream.bufferedReader().readText()
+                            if (json.isNotBlank()) {
+                                return gson.fromJson(json, listType) ?: emptyList()
+                            }
+                        }
+                    }
+                }
+                emptyList()
+            } else {
+                val backupFile = File(
+                    Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
+                    "$BACKUP_FOLDER/$BACKUP_FILE"
+                )
+                if (!backupFile.exists()) return emptyList()
+                val json = backupFile.readText()
+                if (json.isBlank()) return emptyList()
+                gson.fromJson(json, listType) ?: emptyList()
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Restore from MediaStore failed", e)
+            emptyList()
+        }
+    }
+
+    // ── Image Backup (app internal storage) ─────────────────────
 
     private fun getImagesDir(): File {
-        val dir = File(getBackupDir(), IMAGES_FOLDER)
+        val dir = File(context.filesDir, IMAGES_FOLDER)
         if (!dir.exists()) dir.mkdirs()
         return dir
     }
 
     /**
-     * Copy image from content:// URI to /storage/emulated/0/ClickCall/images/contact_{id}.jpg
+     * Copy image from content:// URI to app internal storage.
      * Returns the file path string, or null on failure.
      */
-    fun copyImageToBackup(contentUri: Uri, contactId: Int): String? {
+    private fun copyImageToInternal(contentUri: Uri, contactId: Int): String? {
         return try {
             val destFile = File(getImagesDir(), "contact_$contactId.jpg")
             context.contentResolver.openInputStream(contentUri)?.use { input ->
@@ -138,68 +218,31 @@ class ContactRepository(private val context: Context) {
         }
     }
 
-    /**
-     * Delete backup image for a contact.
-     */
-    private fun deleteBackupImage(contactId: Int) {
+    private fun deleteImage(contactId: Int) {
         try {
             val file = File(getImagesDir(), "contact_$contactId.jpg")
             if (file.exists()) file.delete()
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to delete backup image for contact $contactId", e)
+            Log.e(TAG, "Failed to delete image for contact $contactId", e)
         }
     }
 
     /**
-     * Backup contacts JSON to /storage/emulated/0/ClickCall/contacts_backup.json
+     * If imageUri is a content:// URI, copy to internal storage and return file path.
+     * If already a file path or null, return as-is.
      */
-    private fun backupToExternalStorage(json: String) {
-        try {
-            val backupFile = getBackupFile()
-            backupFile.writeText(json)
-            Log.d(TAG, "Backup saved to ${backupFile.absolutePath}")
-        } catch (e: Exception) {
-            Log.e(TAG, "Backup to external storage failed", e)
-        }
-    }
-
-    /**
-     * Restore contacts from /storage/emulated/0/ClickCall/contacts_backup.json
-     */
-    private fun restoreFromBackup(): List<Contact> {
-        Log.d(TAG, "Attempting restore from external storage backup...")
-        return try {
-            val backupFile = getBackupFile()
-            if (!backupFile.exists()) {
-                Log.d(TAG, "Backup file not found: ${backupFile.absolutePath}")
-                return emptyList()
-            }
-            val json = backupFile.readText()
-            if (json.isBlank()) return emptyList()
-            val contacts: List<Contact> = gson.fromJson(json, listType) ?: emptyList()
-            Log.d(TAG, "Found ${contacts.size} contacts in backup file")
-            contacts
-        } catch (e: Exception) {
-            Log.e(TAG, "Restore from backup failed", e)
-            emptyList()
-        }
-    }
-
-    /**
-     * If imageUri is a content:// URI, copy to backup folder and return the file path.
-     * If it's already a file path or null, return as-is.
-     */
-    private fun backupImageIfNeeded(imageUri: String?, contactId: Int): String? {
+    private fun processImage(imageUri: String?, contactId: Int): String? {
         if (imageUri.isNullOrBlank()) return imageUri
         if (!imageUri.startsWith("content://")) return imageUri
         return try {
-            val uri = Uri.parse(imageUri)
-            copyImageToBackup(uri, contactId)
+            copyImageToInternal(Uri.parse(imageUri), contactId)
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to backup image", e)
+            Log.e(TAG, "Failed to process image", e)
             imageUri
         }
     }
+
+    // ── CRUD ────────────────────────────────────────────────────
 
     suspend fun addContact(contact: Contact): Boolean {
         return withContext(Dispatchers.IO) {
@@ -207,8 +250,8 @@ class ContactRepository(private val context: Context) {
             if (current.size >= MAX_CONTACTS) return@withContext false
 
             val newId = (current.maxOfOrNull { it.id } ?: 0) + 1
-            val backedUpImageUri = backupImageIfNeeded(contact.imageUri, newId)
-            val toInsert = contact.copy(id = newId, imageUri = backedUpImageUri)
+            val savedImageUri = processImage(contact.imageUri, newId)
+            val toInsert = contact.copy(id = newId, imageUri = savedImageUri)
             current.add(0, toInsert)
             saveToFile(current)
             _contactsFlow.value = current
@@ -221,8 +264,8 @@ class ContactRepository(private val context: Context) {
             val current = _contactsFlow.value.toMutableList()
             val idx = current.indexOfFirst { it.id == contact.id }
             if (idx >= 0) {
-                val backedUpImageUri = backupImageIfNeeded(contact.imageUri, contact.id)
-                current[idx] = contact.copy(imageUri = backedUpImageUri)
+                val savedImageUri = processImage(contact.imageUri, contact.id)
+                current[idx] = contact.copy(imageUri = savedImageUri)
                 saveToFile(current)
                 _contactsFlow.value = current
             }
@@ -234,7 +277,7 @@ class ContactRepository(private val context: Context) {
             val current = _contactsFlow.value.toMutableList()
             val removed = current.removeAll { it.id == contact.id }
             if (removed) {
-                deleteBackupImage(contact.id)
+                deleteImage(contact.id)
                 saveToFile(current)
                 _contactsFlow.value = current
             }
@@ -266,6 +309,8 @@ class ContactRepository(private val context: Context) {
             _contactsFlow.value.count { it.isPriority && it.id != excludeId } >= MAX_PRIORITY
         }
     }
+
+    // ── SAF Export / Import ─────────────────────────────────────
 
     suspend fun exportToUri(uri: Uri): Boolean {
         return withContext(Dispatchers.IO) {

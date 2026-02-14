@@ -6,10 +6,12 @@
 <data-extraction-rules>
     <cloud-backup>
         <include domain="file" path="contacts.json"/>
+        <include domain="file" path="contact_images/"/>
         <include domain="sharedpref" path="contact_backup.xml"/>
     </cloud-backup>
     <device-transfer>
         <include domain="file" path="contacts.json"/>
+        <include domain="file" path="contact_images/"/>
         <include domain="sharedpref" path="contact_backup.xml"/>
     </device-transfer>
 </data-extraction-rules>
